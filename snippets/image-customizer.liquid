@@ -1,0 +1,358 @@
+<!-- snippets/image-customizer.liquid -->
+<div class="image-customizer" id="image-customizer">
+  <h2>{{ title }}</h2>
+  
+  <div class="customizer-container">
+    <div class="upload-container">
+      <input type="file" id="image-upload" accept="image/*">
+      <label for="image-upload" class="upload-button">Upload Your Image</label>
+    </div>
+    
+    <div class="editor-container" style="display: none;">
+      <div class="image-editor">
+        <div class="cropper-container">
+          <img id="image-to-edit" src="" alt="Your image">
+        </div>
+        <div class="controls">
+          <button id="rotate-left" type="button">⟲ Rotate Left</button>
+          <button id="rotate-right" type="button">⟳ Rotate Right</button>
+          <button id="reset-crop" type="button">Reset</button>
+          <button id="apply-crop" type="button">Apply Changes</button>
+        </div>
+      </div>
+      
+      <div class="preview-container">
+        <h3>Preview</h3>
+        <div class="product-preview">
+          <img id="product-mockup" src="{{ product_mockup | img_url: 'master' }}" alt="Product Mockup">
+          <div class="custom-image-overlay">
+            <img id="preview-image" src="" alt="Your customized image">
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="submit-container" style="display: none;">
+      <button id="add-to-cart" type="button" class="add-to-cart-button">{{ button_text }}</button>
+      <input type="hidden" id="customized-image-data" name="properties[_custom_image]" value="">
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // We'll load the Cropper.js library dynamically
+    if (!window.Cropper) {
+      // Load CSS
+      var cropperCss = document.createElement('link');
+      cropperCss.rel = 'stylesheet';
+      cropperCss.href = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.css';
+      document.head.appendChild(cropperCss);
+      
+      // Load JavaScript
+      var cropperScript = document.createElement('script');
+      cropperScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js';
+      document.body.appendChild(cropperScript);
+      
+      cropperScript.onload = initializeCustomizer;
+    } else {
+      initializeCustomizer();
+    }
+    
+    function initializeCustomizer() {
+      // Elements
+      const uploadInput = document.getElementById('image-upload');
+      const imageToEdit = document.getElementById('image-to-edit');
+      const editorContainer = document.querySelector('.editor-container');
+      const previewImage = document.getElementById('preview-image');
+      const rotateLeftBtn = document.getElementById('rotate-left');
+      const rotateRightBtn = document.getElementById('rotate-right');
+      const resetBtn = document.getElementById('reset-crop');
+      const applyBtn = document.getElementById('apply-crop');
+      const addToCartBtn = document.getElementById('add-to-cart');
+      const submitContainer = document.querySelector('.submit-container');
+      const customizedImageData = document.getElementById('customized-image-data');
+      
+      let cropper = null;
+      let finalImageData = null;
+      
+      // Initialize image upload
+      if (uploadInput) {
+        uploadInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function(event) {
+              imageToEdit.src = event.target.result;
+              editorContainer.style.display = 'flex';
+              
+              // Initialize cropper after image is loaded
+              imageToEdit.onload = function() {
+                if (cropper) {
+                  cropper.destroy();
+                }
+                
+                cropper = new Cropper(imageToEdit, {
+                  viewMode: 1,
+                  dragMode: 'move',
+                  aspectRatio: 1, // Change this based on your product requirements
+                  autoCropArea: 0.8,
+                  restore: false,
+                  guides: true,
+                  center: true,
+                  highlight: false,
+                  cropBoxMovable: true,
+                  cropBoxResizable: true,
+                  toggleDragModeOnDblclick: false,
+                });
+              };
+            };
+            reader.readAsDataURL(file);
+          }
+        });
+      }
+      
+      // Rotate controls
+      if (rotateLeftBtn) {
+        rotateLeftBtn.addEventListener('click', function() {
+          if (cropper) {
+            cropper.rotate(-90);
+            updatePreview();
+          }
+        });
+      }
+      
+      if (rotateRightBtn) {
+        rotateRightBtn.addEventListener('click', function() {
+          if (cropper) {
+            cropper.rotate(90);
+            updatePreview();
+          }
+        });
+      }
+      
+      // Reset cropper
+      if (resetBtn) {
+        resetBtn.addEventListener('click', function() {
+          if (cropper) {
+            cropper.reset();
+            updatePreview();
+          }
+        });
+      }
+      
+      // Apply changes and show final preview
+      if (applyBtn) {
+        applyBtn.addEventListener('click', function() {
+          if (cropper) {
+            finalImageData = cropper.getCroppedCanvas({
+              maxWidth: 2000, // Maximum width for print quality
+              maxHeight: 2000, // Maximum height for print quality
+              fillColor: '#fff',
+              imageSmoothingEnabled: true,
+              imageSmoothingQuality: 'high'
+            }).toDataURL('image/jpeg', 0.95); // High quality JPEG
+            
+            previewImage.src = finalImageData;
+            if (customizedImageData) {
+              customizedImageData.value = finalImageData;
+            }
+            submitContainer.style.display = 'block';
+            updatePreview();
+          }
+        });
+      }
+      
+      // Update the preview image
+      function updatePreview() {
+        if (cropper) {
+          const canvas = cropper.getCroppedCanvas({
+            maxWidth: 600, // Preview size
+            maxHeight: 600,
+          });
+          
+          if (canvas) {
+            const previewUrl = canvas.toDataURL('image/jpeg');
+            previewImage.src = previewUrl;
+          }
+        }
+      }
+      
+      // Add to cart functionality
+      if (addToCartBtn) {
+        addToCartBtn.addEventListener('click', function() {
+          if (finalImageData) {
+            // Save the image to localStorage for order processing
+            localStorage.setItem('customProductImage', finalImageData);
+            
+            // Add the image to the cart form
+            const cartForm = document.querySelector('form[action="/cart/add"]');
+            if (cartForm) {
+              // Check if the input already exists
+              let customImageInput = cartForm.querySelector('input[name="properties[_custom_image]"]');
+              if (!customImageInput) {
+                customImageInput = document.createElement('input');
+                customImageInput.type = 'hidden';
+                customImageInput.name = 'properties[_custom_image]';
+                cartForm.appendChild(customImageInput);
+              }
+              
+              // Set the image data
+              customImageInput.value = finalImageData;
+              
+              // Submit the form
+              cartForm.submit();
+            } else {
+              console.error('Cart form not found');
+              alert('Error: Could not find the add to cart form.');
+            }
+          } else {
+            alert('Please apply your changes first.');
+          }
+        });
+      }
+    }
+  });
+</script>
+
+<style>
+.image-customizer {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 20px 0;
+  font-family: system-ui, -apple-system, sans-serif;
+}
+
+.customizer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.upload-container {
+  text-align: center;
+  padding: 30px;
+  border: 2px dashed #ccc;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.image-customizer input[type="file"] {
+  display: none;
+}
+
+.upload-button {
+  display: inline-block;
+  padding: 10px 20px;
+  background-color: #4CAF50;
+  color: white;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.upload-button:hover {
+  background-color: #45a049;
+}
+
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+@media (min-width: 768px) {
+  .editor-container {
+    flex-direction: row;
+  }
+}
+
+.image-editor {
+  flex: 1;
+  min-height: 400px;
+}
+
+.cropper-container {
+  height: 400px;
+  background-color: #f0f0f0;
+  overflow: hidden;
+}
+
+.controls {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.controls button {
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.controls button:hover {
+  background-color: #e0e0e0;
+}
+
+.preview-container {
+  flex: 1;
+  padding: 20px;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+
+.product-preview {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#product-mockup {
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.custom-image-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+#preview-image {
+  max-width: 70%;
+  max-height: 70%;
+}
+
+.submit-container {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.add-to-cart-button {
+  padding: 12px 24px;
+  background-color: #4CAF50;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.add-to-cart-button:hover {
+  background-color: #45a049;
+}
+</style>
